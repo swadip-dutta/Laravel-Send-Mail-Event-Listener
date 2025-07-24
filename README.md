@@ -1,61 +1,136 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+✅ First Step Create .env file and setup this (Demo)
+ MAIL_MAILER=smtp
+ MAIL_HOST=mailpit
+ MAIL_PORT=1025
+ MAIL_USERNAME=null
+ MAIL_PASSWORD=null
+ MAIL_ENCRYPTION=null
+ MAIL_FROM_ADDRESS="hello@example.com"
+ MAIL_FROM_NAME="${APP_NAME}"
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+✅ Step 1: Mailable ক্লাস তৈরি করা
 
-## About Laravel
+php artisan make:mail WelcomeMail
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+app/Mail/WelcomeMail.php
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+namespace App\Mail;
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
-## Learning Laravel
+class WelcomeMail extends Mailable implements ShouldQueue
+{
+    use Queueable, SerializesModels;
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+    public $user;
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+    public function __construct($user)
+    {
+        $this->user = $user;
+    }
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+    public function build()
+    {
+        return $this->subject('Welcome to Our Website')
+                    ->view('emails.welcome');
+    }
+}
 
-## Laravel Sponsors
+✅ Step 2: Blade ইমেইল ভিউ তৈরি
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+resources/views/emails/welcome.blade.php
 
-### Premium Partners
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome Email</title>
+</head>
+<body>
+    <h1>Hello, {{ $user->name }}</h1>
+    <p>Thanks for registering with us!</p>
+</body>
+</html>
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+✅ Step 3: Event তৈরি করা
 
-## Contributing
+php artisan make:event UserRegistered
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+app/Events/UserRegistered.php
 
-## Code of Conduct
+namespace App\Events;
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+use App\Models\User;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Broadcasting\InteractsWithSockets;
 
-## Security Vulnerabilities
+class UserRegistered
+{
+    use Dispatchable, InteractsWithSockets, SerializesModels;
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+    public $user;
 
-## License
+    public function __construct(User $user)
+    {
+        $this->user = $user;
+    }
+}
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+✅ Step 4: Listener তৈরি করা
+
+php artisan make:listener SendWelcomeEmail --event=UserRegistered
+
+app/Listeners/SendWelcomeEmail.php
+
+namespace App\Listeners;
+
+use App\Events\UserRegistered;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Queue\InteractsWithQueue;
+use App\Mail\WelcomeMail;
+use Illuminate\Support\Facades\Mail;
+
+class SendWelcomeEmail implements ShouldQueue
+{
+    use InteractsWithQueue;
+
+    public function handle(UserRegistered $event): void
+    {
+        Mail::to($event->user->email)->send(new WelcomeMail($event->user));
+    }
+}
+
+✅ Step 5: EventServiceProvider এ Register করা
+
+app/Providers/EventServiceProvider.php
+
+protected $listen = [
+    \App\Events\UserRegistered::class => [
+        \App\Listeners\SendWelcomeEmail::class,
+    ],
+];
+
+✅ Step 6: Event Dispatch করা (যেমন Registration এর পরে)
+
+যেকোনো জায়গা থেকে ইভেন্ট ট্রিগার করা যায়, যেমন:
+
+use App\Events\UserRegistered;
+
+$user = User::create([
+    'name' => 'John Doe',
+    'email' => 'john@example.com',
+    'password' => bcrypt('password'),
+]);
+
+event(new UserRegistered($user));
+
+✅Step 7: Queue Config (optional but recommended)
+
+    .env ফাইলে QUEUE_CONNECTION=database বা redis সেট করুন।
+
+    Queue worker চালাতে:
+
+php artisan queue:work
